@@ -89,6 +89,8 @@ client.createService(serviceName).then(function(resp) {
 
 ### async/await (node >= 7.6)
 
+#### create function without initializer
+
 ```js
 'use strict';
 
@@ -120,6 +122,48 @@ async function test () {
     console.log('create function: %j', resp);
 
     resp = await client.invokeFunction(serviceName, funcName, 'event');
+    console.log('invoke function: %j', resp);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+test().then();
+```
+
+#### create function with initializer
+```js
+'use strict';
+
+const FCClient = require('@alicloud/fc2');
+
+var client = new FCClient('<account id>', {
+  accessKeyID: '<access key id>',
+  accessKeySecret: '<access key secret>',
+  region: 'cn-shanghai',
+});
+
+var serviceName = '<service name>';
+var funcName = '<function name>';
+
+async function test () {
+  try {
+    var resp = await client.createService(serviceName);
+    console.log('create service: %j', resp);
+
+    resp = await client.createFunction(serviceName, {
+      functionName: funcName,
+      handler: 'counter.handler',
+      memorySize: 128,
+      runtime: 'nodejs4.4',
+      initializer: 'counter.initializer',
+      code: {
+        zipFile: fs.readFileSync('/tmp/counter.zip', 'base64'),
+      },
+    });
+    console.log('create function: %j', resp);
+
+    resp = await client.invokeFunction(serviceName, funcName, null);
     console.log('invoke function: %j', resp);
   } catch (err) {
     console.error(err);

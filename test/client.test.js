@@ -215,6 +215,7 @@ describe('client test', function () {
 
   describe('function should ok', function () {
     const functionName = 'hello-world';
+    const initFunctionName = 'counter';
     const client = new FunctionComputeClient(ACCOUNT_ID, {
       accessKeyID: ACCESS_KEY_ID,
       accessKeySecret: ACCESS_KEY_SECRET,
@@ -254,6 +255,23 @@ describe('client test', function () {
       expect(func.data).to.have.property('functionName', functionName);
     });
 
+    it('createFunction with initializer should ok', async function() {
+      const func = await client.createFunction(serviceName, {
+        functionName: initFunctionName,
+        description: 'function desc',
+        memorySize: 128,
+        handler: 'counter.handler',
+        runtime: 'nodejs4.4',
+        initializationTimeout: 'counter.initializer',
+        timeout: 10,
+        code: {
+          zipFile: fs.readFileSync(path.join(__dirname, 'figures/counter.zip'), 'base64')
+        }
+      });
+      expect(func.data).to.be.ok();
+      expect(func.data).to.have.property('functionName', initFunctionName);
+    });
+
     it('listFunctions should ok', async function() {
       const response = await client.listFunctions(serviceName);
       expect(response.data).to.be.ok();
@@ -261,11 +279,14 @@ describe('client test', function () {
       expect(response.data.functions).to.have.length(1);
       const [func] = response.data.functions;
       expect(func).to.have.property('functionName', functionName);
+      expect(func).to.have.property('functionName', initFunctionName);
     });
 
     it('getFunction should ok', async function() {
       const func = await client.getFunction(serviceName, functionName);
       expect(func.data).to.have.property('functionName', functionName);
+      const initFunc = await client.getFunction(serviceName, initFunctionName);
+      expect(initFunc.data).to.have.property('functionName', initFunctionName);
     });
 
     it('getFunctionCode should ok', async function() {
@@ -280,11 +301,20 @@ describe('client test', function () {
       });
       expect(func.data).to.have.property('functionName', functionName);
       expect(func.data).to.have.property('description', 'updated function desc');
+
+      const initFunc = await client.updateFunction(serviceName, initFunctionName, {
+        description: 'updated function desc'
+      });
+      expect(initFunc.data).to.have.property('functionName', initFunctionName);
+      expect(initFunc.data).to.have.property('description', 'updated function desc');
     });
 
     it('invokeFunction should ok', async function() {
       const response = await client.invokeFunction(serviceName, functionName, 'world');
       expect(response.data).to.be('hello world');
+
+      const initResponse = await client.invokeFunction(serviceName, functionName, null);
+      expect(initResponse.data).to.be('2');
     });
 
     it('invokeFunction should faster', async function() {
@@ -297,6 +327,11 @@ describe('client test', function () {
         'x-fc-invocation-type': 'Async'
       });
       expect(response.data).to.be('');
+
+      const initResponse = await client.invokeFunction(serviceName, functionName, null, {
+        'x-fc-invocation-type': 'Async'
+      });
+      expect(initResponse.data).to.be('');
     });
 
     it('invokeFunction async with upper case header should ok', async function() {
@@ -332,6 +367,24 @@ describe('client test', function () {
         expect(ex.stack).to.contain('Runtime is set to an invalid value');
       }
 
+      try {
+        await client.createFunction(serviceName, {
+          functionName: 'test_invalid_runtime_function',
+          description: 'function desc',
+          memorySize: 128,
+          handler: 'counter.handler',
+          initializer: 'counter.initializer',
+          initializationTimeout: 10,
+          runtime: 10,
+          timeout: 10,
+          code: {
+            zipFile: fs.readFileSync(path.join(__dirname, 'figures/counter.zip'), 'base64')
+          }
+        });
+      } catch (ex) {
+        expect(ex.stack).to.contain('FCInvalidArgumentError');
+        expect(ex.stack).to.contain('Runtime is set to an invalid value');
+      }
     });
 
     it('updateFunction with invalid runtime should fail', async function() {
@@ -345,10 +398,20 @@ describe('client test', function () {
         expect(ex.stack).to.contain('Runtime is set to an invalid value');
       }
 
+      try {
+        await client.updateFunction(serviceName, initFunctionName, {
+          description: 'updated function desc',
+          runtime: 10
+        });
+      } catch (ex) {
+        expect(ex.stack).to.contain('FCInvalidArgumentError');
+        expect(ex.stack).to.contain('Runtime is set to an invalid value');
+      }
     });
 
     it('deleteFunction should ok', async function() {
       await client.deleteFunction(serviceName, functionName);
+      await client.deleteFunction(serviceName, initFunctionName);
       // No exception, no failed
     });
   });
